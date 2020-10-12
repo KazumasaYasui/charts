@@ -1,0 +1,84 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "echo.fullname" . }}
+  labels:
+    {{- include "echo.labels" . | nindent 4 }}
+    app: {{ include "echo.fullname" . }}
+    chart: {{ include "echo.chart" . }}
+    release: {{ .Release.Name }}
+    heritage: {{ .Release.Service }}
+spec:
+{{- if not .Values.autoscaling.enabled }}
+  replicas: {{ .Values.replicaCount }}
+{{- end }}
+  selector:
+    matchLabels:
+      {{- include "echo.selectorLabels" . | nindent 6 }}
+      app: {{ include "echo.fullname" . }}
+      release: {{ .Release.Name }}
+  template:
+    metadata:
+    {{- with .Values.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+    {{- end }}
+      labels:
+        {{- include "echo.selectorLabels" . | nindent 8 }}
+        app: {{ include "echo.fullname" . }}
+        release: {{ .Release.Name }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "echo.serviceAccountName" . }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: nginx
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          image: "{{ .Values.nginx.image.repository }}:{{ .Values.nginx.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.nginx.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.nginx.httpPort | default "80" }}
+              protocol: TCP
+          livenessProbe:
+            httpGet:
+              path: {{ .Values.nginx.healthCheck }}
+              port: 80
+          readinessProbe:
+            httpGet:
+              path: {{ .Values.nginx.healthCheck }}
+              port: 80
+          env:
+            - name: BACKEND_HOST
+              value: {{ .Values.nginx.backendHost | quote }}
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+        - name: echo
+          securityContext:
+          {{- toYaml .Values.securityContext | nindent 12 }}
+          image: "{{ .Values.echo.image.repository }}:{{ .Values.echo.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.echo.image.pullPolicy }}
+          ports:
+            - containerPort: {{ .Values.echo.httpPort | default "8080" }}
+          env:
+            - name: HTTP_PORT
+              value: {{ .Values.echo.httpPort | quote }}
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
